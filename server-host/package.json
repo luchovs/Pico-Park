@@ -1,0 +1,17 @@
+{
+  "name": "server-host",
+  "module": "index.ts",
+  "type": "module",
+  "private": true,
+  "devDependencies": {
+    "@types/bun": "latest"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  },
+  "dependencies": {
+    "express": "^5.2.1",
+    "matter-js": "^0.20.0",
+    "socket.io": "^4.8.3"
+  }
+}
