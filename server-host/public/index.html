@@ -5,57 +5,188 @@
     <style>
       body {
         margin: 0;
+        background: #111;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        height: 100vh;
         overflow: hidden;
-        background: #222;
+        font-family: sans-serif;
       }
       canvas {
-        display: block;
+        max-width: 100vw;
+        max-height: 100vh;
+        box-shadow: 0 0 20px rgba(0, 0, 0, 0.8);
+      }
+
+      /* OVERLAY NEGRO DE VICTORIA */
+      #winOverlay {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.85);
+        display: none;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        z-index: 100;
+      }
+      #winOverlay h1 {
+        color: white;
+        font-size: 60px;
+        margin-bottom: 20px;
+        text-transform: uppercase;
+        letter-spacing: 5px;
+      }
+      #btnRestart {
+        padding: 15px 40px;
+        font-size: 24px;
+        cursor: pointer;
+        background: white;
+        border: none;
+        border-radius: 5px;
+        font-weight: bold;
+        transition: transform 0.2s;
+      }
+      #btnRestart:hover {
+        transform: scale(1.1);
+        background: #ddd;
       }
     </style>
   </head>
   <body>
+    <div id="winOverlay">
+      <h1>¡NIVEL COMPLETADO!</h1>
+      <button id="btnRestart">REINICIAR NIVEL</button>
+    </div>
+
     <script src="/socket.io/socket.io.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.19.0/matter.min.js"></script>
     <script>
       const socket = io();
-
-      // Configuración visual local
       const engine = Matter.Engine.create();
+
       const render = Matter.Render.create({
         element: document.body,
         engine: engine,
-        options: { width: 800, height: 600, wireframes: false },
+        options: {
+          width: 1280,
+          height: 720,
+          wireframes: false,
+          background: "#111",
+        },
       });
-
-      // Suelo estático
-      const ground = Matter.Bodies.rectangle(400, 580, 810, 60, {
-        isStatic: true,
-      });
-      Matter.Composite.add(engine.world, ground);
       Matter.Render.run(render);
 
-      const playerRenders = {};
+      const entityRenders = {};
+      let currentEntities = [];
 
-      socket.on("stateUpdate", (players) => {
-        players.forEach((p) => {
-          if (!playerRenders[p.id]) {
-            // Si el jugador es nuevo, creamos su cuadrado visual
-            playerRenders[p.id] = Matter.Bodies.rectangle(p.x, p.y, 40, 40, {
-              render: { fillStyle: p.color },
-            });
-            Matter.Composite.add(engine.world, playerRenders[p.id]);
+      const imgKey = new Image();
+      imgKey.src = "/llave.png";
+      const imgDoorClosed = new Image();
+      imgDoorClosed.src = "/puerta_cerrada.png";
+      const imgDoorOpen = new Image();
+      imgDoorOpen.src = "/puerta_abierta.png";
+
+      // LÓGICA DEL BOTÓN REINICIAR
+      document.getElementById("btnRestart").onclick = () => {
+        socket.emit("restart");
+      };
+
+      Matter.Events.on(render, "afterRender", () => {
+        const ctx = render.context;
+
+        // 1. DIBUJAR PUERTA
+        const door = currentEntities.find((e) => e.type === "door");
+        if (door) {
+          const img = door.isOpen ? imgDoorOpen : imgDoorClosed;
+          if (img.complete) {
+            ctx.drawImage(
+              img,
+              door.x - 50,
+              door.isOpen ? door.y - 120 : door.y - 130,
+              100,
+              170,
+            );
           } else {
-            // Actualizamos posición según lo que dice el servidor
-            Matter.Body.setPosition(playerRenders[p.id], { x: p.x, y: p.y });
+            ctx.fillStyle = door.isOpen ? "#0f0" : "#420";
+            ctx.fillRect(door.x - 30, door.y - 40, 60, 80);
+          }
+        }
+
+        // 2. DIBUJAR LLAVE
+        const keyEnt = currentEntities.find((e) => e.type === "key");
+        if (keyEnt) {
+          if (imgKey.complete)
+            ctx.drawImage(imgKey, keyEnt.x - 20, keyEnt.y - 20, 80, 80);
+          else {
+            ctx.fillStyle = "yellow";
+            ctx.beginPath();
+            ctx.arc(keyEnt.x, keyEnt.y, 10, 0, Math.PI * 2);
+            ctx.fill();
+          }
+        }
+
+        // 3. DIBUJAR JUGADORES
+        currentEntities
+          .filter((e) => e.type === "player")
+          .forEach((p) => {
+            ctx.fillStyle = p.color;
+            ctx.fillRect(p.x - 16, p.y - 24, 32, 48);
+            ctx.strokeStyle = "black";
+            ctx.lineWidth = 2;
+            ctx.strokeRect(p.x - 16, p.y - 24, 32, 48);
+            ctx.fillStyle = "white";
+            let off = p.moveDir >= 0 ? 4 : -16;
+            ctx.fillRect(p.x + off, p.y - 12, 8, 8);
+            ctx.fillRect(p.x + off + 12, p.y - 12, 8, 8);
+            ctx.fillStyle = "black";
+            ctx.fillRect(p.x + off + (p.moveDir >= 0 ? 5 : 1), p.y - 10, 3, 3);
+            ctx.fillRect(
+              p.x + off + (p.moveDir >= 0 ? 17 : 13),
+              p.y - 10,
+              3,
+              3,
+            );
+          });
+      });
+
+      socket.on("stateUpdate", (data) => {
+        currentEntities = data.entities;
+
+        // MOSTRAR/OCULTAR OVERLAY
+        const overlay = document.getElementById("winOverlay");
+        overlay.style.display = data.levelWon ? "flex" : "none";
+
+        currentEntities.forEach((ent) => {
+          if (!entityRenders[ent.id]) {
+            const isGround = ent.type === "ground";
+            entityRenders[ent.id] = Matter.Bodies.rectangle(
+              ent.x,
+              ent.y,
+              isGround ? 1280 : 32,
+              isGround ? 60 : 48,
+              {
+                isStatic: true,
+                render: { visible: isGround, fillStyle: "#555" },
+              },
+            );
+            Matter.Composite.add(engine.world, entityRenders[ent.id]);
+          } else {
+            Matter.Body.setPosition(entityRenders[ent.id], {
+              x: ent.x,
+              y: ent.y,
+            });
           }
         });
 
-        // Limpieza: si un jugador se desconecta, borrar su cuadrado
-        const activeIds = players.map((p) => p.id);
-        Object.keys(playerRenders).forEach((id) => {
-          if (!activeIds.includes(id)) {
-            Matter.Composite.remove(engine.world, playerRenders[id]);
-            delete playerRenders[id];
+        const ids = currentEntities.map((e) => e.id);
+        Object.keys(entityRenders).forEach((id) => {
+          if (!ids.includes(id)) {
+            Matter.Composite.remove(engine.world, entityRenders[id]);
+            delete entityRenders[id];
           }
         });
       });
