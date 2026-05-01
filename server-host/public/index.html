@@ -19,15 +19,14 @@
         box-shadow: 0 0 20px rgba(0, 0, 0, 0.8);
       }
 
-      /* OVERLAY NEGRO DE VICTORIA */
       #winOverlay {
         position: absolute;
         top: 0;
         left: 0;
         width: 100%;
         height: 100%;
-        background: rgba(0, 0, 0, 0.85);
-        display: none;
+        background: rgba(0, 0, 0, 0);
+        display: flex; /* Empezamos mostrándolo */
         flex-direction: column;
         justify-content: center;
         align-items: center;
@@ -36,9 +35,15 @@
       #winOverlay h1 {
         color: white;
         font-size: 60px;
-        margin-bottom: 20px;
+        margin-bottom: 10px;
         text-transform: uppercase;
         letter-spacing: 5px;
+        text-align: center;
+      }
+      #playerStatus {
+        color: #aaa;
+        margin-bottom: 30px;
+        font-size: 20px;
       }
       #btnRestart {
         padding: 15px 40px;
@@ -50,16 +55,23 @@
         font-weight: bold;
         transition: transform 0.2s;
       }
-      #btnRestart:hover {
+      #btnRestart:hover:not(:disabled) {
         transform: scale(1.1);
         background: #ddd;
+      }
+      #btnRestart:disabled {
+        background: #555;
+        color: #888;
+        cursor: not-allowed;
       }
     </style>
   </head>
   <body>
+    <!-- UN SOLO OVERLAY PARA TODO -->
     <div id="winOverlay">
-      <h1>¡NIVEL COMPLETADO!</h1>
-      <button id="btnRestart">REINICIAR NIVEL</button>
+      <h1 id="overlayTitle">ESPERANDO JUGADORES</h1>
+      <div id="playerStatus">Conectados: 0/4</div>
+      <button id="btnRestart" disabled>EMPEZAR JUEGO</button>
     </div>
 
     <script src="/socket.io/socket.io.js"></script>
@@ -67,6 +79,12 @@
     <script>
       const socket = io();
       const engine = Matter.Engine.create();
+      
+      // Referencias al DOM
+      const overlay = document.getElementById("winOverlay");
+      const overlayTitle = document.getElementById("overlayTitle");
+      const playerStatus = document.getElementById("playerStatus");
+      const btnRestart = document.getElementById("btnRestart");
 
       const render = Matter.Render.create({
         element: document.body,
@@ -79,112 +97,137 @@
         },
       });
       Matter.Render.run(render);
+      render.options.hasBounds = true;
 
       const entityRenders = {};
       let currentEntities = [];
+      let levelWon = false;
 
-      const imgKey = new Image();
-      imgKey.src = "/llave.png";
-      const imgDoorClosed = new Image();
-      imgDoorClosed.src = "/puerta_cerrada.png";
-      const imgDoorOpen = new Image();
-      imgDoorOpen.src = "/puerta_abierta.png";
+      // Carga de imágenes
+      const imgKey = new Image(); imgKey.src = "/llave.png";
+      const imgDoorClosed = new Image(); imgDoorClosed.src = "/puerta_cerrada.png";
+      const imgDoorOpen = new Image(); imgDoorOpen.src = "/puerta_abierta.png";
 
-      // LÓGICA DEL BOTÓN REINICIAR
-      document.getElementById("btnRestart").onclick = () => {
+      const DOOR_CONFIG = {
+        closed: {
+          width: 80,
+          height: 140,
+          offsetX: 50, // (ancho / 2) para centrar
+          offsetY: 94  // Ajuste de altura
+        },
+        open: {
+          width: 105.7,
+          height: 140,
+          offsetX: 50,
+          offsetY: 94
+        }
+      };
+
+      // --- 1. LÓGICA DE JUGADORES CONECTADOS ---
+      socket.on("playerCountUpdate", (data) => {
+        playerStatus.innerText = `Conectados: ${data.count}/2`;
+        
+        // Si el nivel NO está ganado, controlamos el overlay de espera
+        if (!levelWon) {
+          overlay.style.display = "flex";
+          if (data.canStart) {
+            btnRestart.disabled = false;
+            overlayTitle.innerText = "¡LISTOS PARA JUGAR!";
+            btnRestart.innerText = "EMPEZAR JUEGO";
+          } else {
+            btnRestart.disabled = true;
+            overlayTitle.innerText = "ESPERANDO JUGADORES";
+          }
+        }
+      });
+
+      // --- 2. LÓGICA DEL BOTÓN (Reiniciar / Empezar) ---
+      btnRestart.onclick = () => {
+        overlay.style.display = "none";
         socket.emit("restart");
       };
 
+      // --- 3. DIBUJO PERSONALIZADO (Sprites) ---
       Matter.Events.on(render, "afterRender", () => {
         const ctx = render.context;
+        
+        // --- Dentro de Matter.Events.on(render, "afterRender", ...) ---
 
-        // 1. DIBUJAR PUERTA
-        const door = currentEntities.find((e) => e.type === "door");
+        const door = currentEntities.find(e => e.type === "door");
+
         if (door) {
+          // 1. Elegimos qué config usar basándonos en el estado
+          const config = door.isOpen ? DOOR_CONFIG.open : DOOR_CONFIG.closed;
           const img = door.isOpen ? imgDoorOpen : imgDoorClosed;
+
           if (img.complete) {
             ctx.drawImage(
-              img,
-              door.x - 50,
-              door.isOpen ? door.y - 120 : door.y - 130,
-              100,
-              170,
+              img, 
+              door.x - config.offsetX, // Posición X independiente
+              door.y - config.offsetY, // Posición Y independiente
+              config.width,            // Ancho independiente
+              config.height            // Alto independiente
             );
-          } else {
-            ctx.fillStyle = door.isOpen ? "#0f0" : "#420";
-            ctx.fillRect(door.x - 30, door.y - 40, 60, 80);
           }
         }
 
-        // 2. DIBUJAR LLAVE
-        const keyEnt = currentEntities.find((e) => e.type === "key");
-        if (keyEnt) {
-          if (imgKey.complete)
-            ctx.drawImage(imgKey, keyEnt.x - 20, keyEnt.y - 20, 80, 80);
-          else {
-            ctx.fillStyle = "yellow";
-            ctx.beginPath();
-            ctx.arc(keyEnt.x, keyEnt.y, 10, 0, Math.PI * 2);
-            ctx.fill();
-          }
-        }
+        // Llave
+        const keyEnt = currentEntities.find(e => e.type === "key");
+        if (keyEnt && imgKey.complete) ctx.drawImage(imgKey, keyEnt.x - 20, keyEnt.y - 5, 60, 60);
 
-        // 3. DIBUJAR JUGADORES
-        currentEntities
-          .filter((e) => e.type === "player")
-          .forEach((p) => {
-            ctx.fillStyle = p.color;
-            ctx.fillRect(p.x - 16, p.y - 24, 32, 48);
-            ctx.strokeStyle = "black";
-            ctx.lineWidth = 2;
-            ctx.strokeRect(p.x - 16, p.y - 24, 32, 48);
-            ctx.fillStyle = "white";
-            let off = p.moveDir >= 0 ? 4 : -16;
-            ctx.fillRect(p.x + off, p.y - 12, 8, 8);
-            ctx.fillRect(p.x + off + 12, p.y - 12, 8, 8);
-            ctx.fillStyle = "black";
-            ctx.fillRect(p.x + off + (p.moveDir >= 0 ? 5 : 1), p.y - 10, 3, 3);
-            ctx.fillRect(
-              p.x + off + (p.moveDir >= 0 ? 17 : 13),
-              p.y - 10,
-              3,
-              3,
-            );
-          });
+        // Jugadores (con ojitos)
+        currentEntities.filter(e => e.type === "player").forEach(p => {
+          ctx.fillStyle = p.color;
+          ctx.fillRect(p.x - 16, p.y - 24, 32, 48);
+          ctx.strokeStyle = "black";
+          ctx.strokeRect(p.x - 16, p.y - 24, 32, 48);
+          
+          // Ojos
+          ctx.fillStyle = "white";
+          let off = p.moveDir >= 0 ? 4 : -16;
+          ctx.fillRect(p.x + off, p.y - 12, 8, 8);
+          ctx.fillRect(p.x + off + 12, p.y - 12, 8, 8);
+          ctx.fillStyle = "black";
+          ctx.fillRect(p.x + off + (p.moveDir >= 0 ? 5 : 1), p.y - 10, 3, 3);
+          ctx.fillRect(p.x + off + (p.moveDir >= 0 ? 17 : 13), p.y - 10, 3, 3);
+        });
       });
 
+      // --- 4. ACTUALIZACIÓN DEL ESTADO (60 FPS) ---
       socket.on("stateUpdate", (data) => {
         currentEntities = data.entities;
+        
+        // Si ganaron el nivel
+        if (data.levelWon && !levelWon) {
+          levelWon = true;
+          overlay.style.display = "flex";
+          overlayTitle.innerText = "¡NIVEL COMPLETADO!";
+          btnRestart.innerText = "SIGUIENTE NIVEL";
+          btnRestart.disabled = false;
+        } else if (!data.levelWon) {
+          levelWon = false;
+        }
 
-        // MOSTRAR/OCULTAR OVERLAY
-        const overlay = document.getElementById("winOverlay");
-        overlay.style.display = data.levelWon ? "flex" : "none";
-
+        // Sincronizar cuerpos de Matter.js para colisiones en el Host si fuera necesario
         currentEntities.forEach((ent) => {
           if (!entityRenders[ent.id]) {
             const isGround = ent.type === "ground";
             entityRenders[ent.id] = Matter.Bodies.rectangle(
-              ent.x,
-              ent.y,
-              isGround ? 1280 : 32,
-              isGround ? 60 : 48,
-              {
-                isStatic: true,
-                render: { visible: isGround, fillStyle: "#555" },
-              },
+              ent.x, ent.y, 
+              isGround ? 1280 : 32, 
+              isGround ? 60 : 48, 
+              { isStatic: true, render: { visible: isGround, fillStyle: "#555" } }
             );
             Matter.Composite.add(engine.world, entityRenders[ent.id]);
           } else {
-            Matter.Body.setPosition(entityRenders[ent.id], {
-              x: ent.x,
-              y: ent.y,
-            });
+            Matter.Body.setPosition(entityRenders[ent.id], { x: ent.x, y: ent.y });
           }
         });
 
-        const ids = currentEntities.map((e) => e.id);
-        Object.keys(entityRenders).forEach((id) => {
-          if (!ids.includes(id)) {
+        // Limpiar entidades viejas
+        const ids = currentEntities.map(e => e.id);
+        Object.keys(entityRenders).forEach(id => {
+          if (!currentIds.includes(id)) {
             Matter.Composite.remove(engine.world, entityRenders[id]);
             delete entityRenders[id];
           }
