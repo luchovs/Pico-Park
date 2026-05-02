@@ -17,8 +17,8 @@ const HEIGHT = 720;
 
 // Escenario
 const ground = Matter.Bodies.rectangle(WIDTH / 2, 680, WIDTH, 60, { isStatic: true });
-const leftWall = Matter.Bodies.rectangle(0, HEIGHT / 2, 20, HEIGHT, { isStatic: true });
-const rightWall = Matter.Bodies.rectangle(WIDTH, HEIGHT / 2, 20, HEIGHT, { isStatic: true });
+const leftWall = Matter.Bodies.rectangle(0, HEIGHT / 2, 20, HEIGHT, { isStatic: true, friction: 0 });
+const rightWall = Matter.Bodies.rectangle(WIDTH, HEIGHT / 2, 20, HEIGHT, { isStatic: true, friction: 0 });
 
 // Variables de estado del nivel
 let hasKey = false;
@@ -29,8 +29,12 @@ let gameStarted = false;
 
 const key = Matter.Bodies.circle(1000, 600, 15, { isStatic: true, isSensor: true });
 const door = Matter.Bodies.rectangle(1150, 610, 60, 80, { isStatic: true, isSensor: true });
+const step1 = Matter.Bodies.rectangle(520, 625, 120, 50, { isStatic: true, friction: 0, frictionStatic: 0 });
+const step2 = Matter.Bodies.rectangle(630, 600, 120, 100, { isStatic: true, friction: 0, frictionStatic: 0 });
+const step3 = Matter.Bodies.rectangle(740, 575, 120, 150, { isStatic: true, friction: 0, frictionStatic: 0 });
 
-Matter.Composite.add(world, [ground, leftWall, rightWall, key, door]);
+Matter.Composite.add(world, [ground, leftWall, rightWall, step1, step2, step3, key, door]);
+Matter.Body.setPosition(key, { x: 900, y: 400 });
 
 const players = {};
 const colors = ["#FF0000", "#00FF00", "#0000FF", "#FFFF00"];
@@ -108,8 +112,11 @@ io.on("connection", (socket) => {
 
         const playerColor = colors[Object.keys(players).length % colors.length];
         const playerBody = Matter.Bodies.rectangle(200, 600, 32, 48, {
+            friction: 0,
+            frictionStatic: 0,
+            frictionAir: 0.05,
             inertia: Infinity,
-            friction: 0.1,
+            restitution: 0
         });
 
         players[socket.id] = {
@@ -154,10 +161,19 @@ Matter.Events.on(engine, "beforeUpdate", () => {
     if (!gameStarted) return;
     Object.values(players).forEach((p) => {
         if (!p.isFinished) {
-            Matter.Body.setVelocity(p.body, { x: p.moveDir * 5, y: p.body.velocity.y });
+            // AUMENTAR VELOCIDAD X: Cambiamos 5 por 7 para que sea más rápido
+            Matter.Body.setVelocity(p.body, { x: p.moveDir * 7, y: p.body.velocity.y });
+
+            // CORRECCIÓN SALTO INFINITO Y ALTURA:
+            // Usamos un umbral pequeño (0.1) para saber si está "quieto" en vertical
             if (p.wantsToJump && Math.abs(p.body.velocity.y) < 0.1) {
-                Matter.Body.setVelocity(p.body, { x: p.body.velocity.x, y: -12 });
+                // REDUCIR SALTO: Cambiamos -12 por -10 (ajustalo a gusto)
+                Matter.Body.setVelocity(p.body, { x: p.body.velocity.x, y: -10 });
                 p.wantsToJump = false;
+            } else if (p.wantsToJump) {
+                // Si quiso saltar pero no estaba en el suelo, le apagamos el deseo 
+                // para que no salte apenas toque una plataforma por error
+                p.wantsToJump = false; 
             }
         }
     });
@@ -179,6 +195,17 @@ setInterval(() => {
             moveDir: players[id].moveDir,
             type: "player",
         }));
+        // Dentro del setInterval, cuando armás el array entities:
+            [step1, step2, step3].forEach((step, index) => {
+                entities.push({
+                    id: `step_${index}`,
+                    x: step.position.x,
+                    y: step.position.y,
+                    w: step.bounds.max.x - step.bounds.min.x, // Ancho real
+                    h: step.bounds.max.y - step.bounds.min.y, // Alto real
+                    type: "platform"
+                });
+            });
 
     if (!hasKey) {
         entities.push({ id: "key", x: key.position.x, y: key.position.y, type: "key" });

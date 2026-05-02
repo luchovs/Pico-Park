@@ -150,7 +150,20 @@
       // --- 3. DIBUJO PERSONALIZADO (Sprites) ---
       Matter.Events.on(render, "afterRender", () => {
         const ctx = render.context;
-        
+
+        const ground = currentEntities.find(e => e.type === "ground");
+        if (ground) {
+            ctx.fillStyle = "#333"; // El color gris oscuro que tenías
+            // Lo centramos: x - (ancho/2), y - (alto/2)
+            // Usamos los valores fijos que tenés: 1280 de ancho y 60 de alto
+            ctx.fillRect(ground.x - 640, ground.y - 30, 1280, 60);
+        }
+
+        currentEntities.filter(e => e.type === "platform").forEach(plt => {
+            ctx.fillStyle = "#444";
+            ctx.fillRect(plt.x - (plt.w / 2), plt.y - (plt.h / 2), plt.w, plt.h);
+        });
+
         // --- Dentro de Matter.Events.on(render, "afterRender", ...) ---
 
         const door = currentEntities.find(e => e.type === "door");
@@ -173,7 +186,9 @@
 
         // Llave
         const keyEnt = currentEntities.find(e => e.type === "key");
-        if (keyEnt && imgKey.complete) ctx.drawImage(imgKey, keyEnt.x - 20, keyEnt.y - 5, 60, 60);
+        if (keyEnt && imgKey.complete) {
+          ctx.drawImage(imgKey, keyEnt.x - 25, keyEnt.y - 45, 20, 51.2  );
+        }
 
         // Jugadores (con ojitos)
         currentEntities.filter(e => e.type === "player").forEach(p => {
@@ -184,18 +199,42 @@
           
           // Ojos
           ctx.fillStyle = "white";
-          let off = p.moveDir >= 0 ? 4 : -16;
+          let off = p.moveDir >= 0 ? -6 : -14;
           ctx.fillRect(p.x + off, p.y - 12, 8, 8);
           ctx.fillRect(p.x + off + 12, p.y - 12, 8, 8);
           ctx.fillStyle = "black";
           ctx.fillRect(p.x + off + (p.moveDir >= 0 ? 5 : 1), p.y - 10, 3, 3);
           ctx.fillRect(p.x + off + (p.moveDir >= 0 ? 17 : 13), p.y - 10, 3, 3);
         });
+
+        currentEntities.filter(e => e.type === "platform").forEach(plt => {
+          ctx.fillStyle = "#444";
+          ctx.fillRect(plt.x - (plt.w / 2), plt.y - (plt.h / 2), plt.w, plt.h);
+        });
       });
 
       // --- 4. ACTUALIZACIÓN DEL ESTADO (60 FPS) ---
       socket.on("stateUpdate", (data) => {
         currentEntities = data.entities;
+
+        currentEntities.forEach((ent) => {
+        if (!entityRenders[ent.id]) {
+            const isPlatform = ent.type === "platform";
+            const w = isPlatform ? ent.width : (ent.type === "ground" ? 1280 : 32);
+            const h = isPlatform ? ent.height : (ent.type === "ground" ? 60 : 48);
+            
+            entityRenders[ent.id] = Matter.Bodies.rectangle(ent.x, ent.y, w, h, { 
+                isStatic: true, 
+                render: { 
+                    visible: false, 
+                    fillStyle: isPlatform ? "#444" : "#555" // Plataformas más oscuritas
+                } 
+            });
+            Matter.Composite.add(engine.world, entityRenders[ent.id]);
+        } else {
+            Matter.Body.setPosition(entityRenders[ent.id], { x: ent.x, y: ent.y });
+        }
+    });
         
         // Si ganaron el nivel
         if (data.levelWon && !levelWon) {
