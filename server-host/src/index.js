@@ -11,6 +11,7 @@ app.use(express.static("public"));
 
 const engine = Matter.Engine.create();
 const { world } = engine;
+engine.world.gravity.y = 3;
 
 const WIDTH = 1280;
 const HEIGHT = 720;
@@ -29,11 +30,53 @@ let gameStarted = false;
 
 const key = Matter.Bodies.circle(1000, 600, 15, { isStatic: true, isSensor: true });
 const door = Matter.Bodies.rectangle(1150, 610, 60, 80, { isStatic: true, isSensor: true });
-const step1 = Matter.Bodies.rectangle(520, 625, 120, 50, { isStatic: true, friction: 0, frictionStatic: 0 });
-const step2 = Matter.Bodies.rectangle(630, 600, 120, 100, { isStatic: true, friction: 0, frictionStatic: 0 });
-const step3 = Matter.Bodies.rectangle(740, 575, 120, 150, { isStatic: true, friction: 0, frictionStatic: 0 });
 
-Matter.Composite.add(world, [ground, leftWall, rightWall, step1, step2, step3, key, door]);
+
+let currentLevel = 1;
+let levelPlatforms = [];
+
+function cargarNivel(num) {
+    // 1. Limpiamos las plataformas anteriores del mundo físico
+    levelPlatforms.forEach(p => Matter.Composite.remove(world, p));
+    levelPlatforms = [];
+
+    if (num === 1) {
+        // Tu nivel original de los escalones
+        levelPlatforms = [
+            Matter.Bodies.rectangle(520, 625, 120, 50, { isStatic: true, friction: 0 }),
+            Matter.Bodies.rectangle(630, 600, 120, 100, { isStatic: true, friction: 0 }),
+            Matter.Bodies.rectangle(740, 575, 120, 150, { isStatic: true, friction: 0 })
+        ];
+        Matter.Body.setPosition(key, { x: 900, y: 400 });
+        Matter.Body.setPosition(door, { x: 1150, y: 610 });
+    } 
+    else if (num === 2) {
+        // NIVEL 2: La plataforma del medio es alta y chica
+        // Ideal para que tengan que saltar uno arriba del otro
+        levelPlatforms = [
+            Matter.Bodies.rectangle(640, 400, 150, 20, { isStatic: true, friction: 0 }), // Plataforma flotante
+            Matter.Bodies.rectangle(300, 550, 100, 20, { isStatic: true, friction: 0 })  // Escalón de ayuda
+        ];
+        Matter.Body.setPosition(key, { x: 640, y: 250 }); // Llave bien arriba
+        Matter.Body.setPosition(door, { x: 1150, y: 610 });
+    }
+
+    else {
+        // SI YA NO HAY MÁS NIVELES (Nivel 3 en adelante)
+        currentLevel = 1; // Reseteamos el contador internamente
+        // Opcional: Podés mover la puerta y la llave afuera para que no se vean
+        Matter.Body.setPosition(key, { x: -1000, y: -1000 });
+        Matter.Body.setPosition(door, { x: -1000, y: -1000 });
+    }
+
+    // 2. Agregamos las nuevas al mundo
+    Matter.Composite.add(world, levelPlatforms);
+}
+
+// Llamada inicial para que arranque el nivel 1 apenas abrís el server
+cargarNivel(1);
+
+Matter.Composite.add(world, [ground, leftWall, rightWall, key, door]);
 Matter.Body.setPosition(key, { x: 900, y: 400 });
 
 const players = {};
@@ -140,7 +183,15 @@ io.on("connection", (socket) => {
     });
 
     socket.on("restart", () => {
-        resetLevel();
+        if (levelWon) {
+            currentLevel++;
+            // Si el nivel que sigue ya no existe, volvemos al 1
+            if (currentLevel > 2) {
+                currentLevel = 1;
+            }
+        }
+        cargarNivel(currentLevel);
+        resetLevel(); 
     });
 
     socket.on("disconnect", () => {
@@ -168,7 +219,7 @@ Matter.Events.on(engine, "beforeUpdate", () => {
             // Usamos un umbral pequeño (0.1) para saber si está "quieto" en vertical
             if (p.wantsToJump && Math.abs(p.body.velocity.y) < 0.1) {
                 // REDUCIR SALTO: Cambiamos -12 por -10 (ajustalo a gusto)
-                Matter.Body.setVelocity(p.body, { x: p.body.velocity.x, y: -10 });
+                Matter.Body.setVelocity(p.body, { x: p.body.velocity.x, y: -20 });
                 p.wantsToJump = false;
             } else if (p.wantsToJump) {
                 // Si quiso saltar pero no estaba en el suelo, le apagamos el deseo 
@@ -196,16 +247,16 @@ setInterval(() => {
             type: "player",
         }));
         // Dentro del setInterval, cuando armás el array entities:
-            [step1, step2, step3].forEach((step, index) => {
-                entities.push({
-                    id: `step_${index}`,
-                    x: step.position.x,
-                    y: step.position.y,
-                    w: step.bounds.max.x - step.bounds.min.x, // Ancho real
-                    h: step.bounds.max.y - step.bounds.min.y, // Alto real
-                    type: "platform"
-                });
-            });
+    levelPlatforms.forEach((step, index) => {
+        entities.push({
+            id: `step_${index}`,
+            x: step.position.x,
+            y: step.position.y,
+            w: step.bounds.max.x - step.bounds.min.x,
+            h: step.bounds.max.y - step.bounds.min.y,
+            type: "platform"
+        });
+    });
 
     if (!hasKey) {
         entities.push({ id: "key", x: key.position.x, y: key.position.y, type: "key" });
@@ -226,7 +277,7 @@ setInterval(() => {
         type: "ground",
     });
 
-    io.emit("stateUpdate", { entities, levelWon });
+    io.emit("stateUpdate", { entities, levelWon, currentLevel });
 }, 1000 / 60);
 
 server.listen(3000, "0.0.0.0");

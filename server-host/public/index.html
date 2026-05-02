@@ -39,6 +39,8 @@
         text-transform: uppercase;
         letter-spacing: 5px;
         text-align: center;
+        display: flex;
+        flex-direction: column;
       }
       #playerStatus {
         color: #aaa;
@@ -238,13 +240,22 @@
         
         // Si ganaron el nivel
         if (data.levelWon && !levelWon) {
-          levelWon = true;
-          overlay.style.display = "flex";
-          overlayTitle.innerText = "¡NIVEL COMPLETADO!";
-          btnRestart.innerText = "SIGUIENTE NIVEL";
-          btnRestart.disabled = false;
+            levelWon = true;
+            overlay.style.display = "flex";
+
+            if (data.currentLevel === 1) {
+                // Textos para cuando termina el Nivel 1
+                overlayTitle.innerHTML = "¡NIVEL 1 COMPLETADO!<br><span style='font-size: 24px; color: #aaa;";
+                btnRestart.innerText = "SIGUIENTE NIVEL";
+            } else if (data.currentLevel === 2) {
+                // Textos para cuando termina el Nivel 2 (Fin del juego)
+                overlayTitle.innerHTML = "¡NIVEL 2 COMPLETADO!<br><span style='font-size: 40px; color: #00FF00;'>FIN DEL JUEGO</span>";
+                btnRestart.innerText = "REINICIAR JUEGO";
+            }
+
+            btnRestart.disabled = false;
         } else if (!data.levelWon) {
-          levelWon = false;
+            levelWon = false;
         }
 
         // Sincronizar cuerpos de Matter.js para colisiones en el Host si fuera necesario
@@ -266,7 +277,7 @@
         // Limpiar entidades viejas
         const ids = currentEntities.map(e => e.id);
         Object.keys(entityRenders).forEach(id => {
-          if (!currentIds.includes(id)) {
+          if (!ids.includes(id)) {
             Matter.Composite.remove(engine.world, entityRenders[id]);
             delete entityRenders[id];
           }
