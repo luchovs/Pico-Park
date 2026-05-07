@@ -3,25 +3,25 @@ import { StyleSheet, Text, View, TouchableOpacity } from "react-native";
 import { io } from "socket.io-client";
 
 // REEMPLAZA CON LA IP DE TU PC
-const SERVER_URL = "http://192.168.0.9:3000";
+const SERVER_URL = "http://10.56.2.8:3000";
 
 export default function App() {
   const [socket, setSocket] = useState(null);
   const [myColor, setMyColor] = useState("#ccc");
 
   useEffect(() => {
-      const newSocket = io(SERVER_URL);
-      setSocket(newSocket);
+    const newSocket = io(SERVER_URL);
+    setSocket(newSocket);
 
-      // AVISAR AL SERVIDOR QUE SOMOS UN JUGADOR
-      newSocket.emit("joinGame"); 
+    // AVISAR AL SERVIDOR QUE SOMOS UN JUGADOR
+    newSocket.emit("joinGame");
 
-      newSocket.on("init", (data) => {
-        setMyColor(data.color);
-      });
+    newSocket.on("init", (data) => {
+      setMyColor(data.color);
+    });
 
-      return () => newSocket.close();
-    }, []);
+    return () => newSocket.close();
+  }, []);
 
   const sendMove = (x, y) => {
     if (socket) socket.emit("move", { x, y });
