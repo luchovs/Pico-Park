@@ -3,7 +3,7 @@ import { StyleSheet, Text, View, TouchableOpacity } from "react-native";
 import { io } from "socket.io-client";
 
 // REEMPLAZA CON LA IP DE TU PC
-const SERVER_URL = "http://192.168.0.86:3000";
+const SERVER_URL = "http://192.168.0.9:3000";
 
 export default function App() {
   const [socket, setSocket] = useState(null);

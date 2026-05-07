@@ -16,68 +16,131 @@ engine.world.gravity.y = 3;
 const WIDTH = 1280;
 const HEIGHT = 720;
 
-// Escenario
+// Escenario base
 const ground = Matter.Bodies.rectangle(WIDTH / 2, 680, WIDTH, 60, { isStatic: true });
 const leftWall = Matter.Bodies.rectangle(0, HEIGHT / 2, 20, HEIGHT, { isStatic: true, friction: 0 });
 const rightWall = Matter.Bodies.rectangle(WIDTH, HEIGHT / 2, 20, HEIGHT, { isStatic: true, friction: 0 });
 
-// Variables de estado del nivel
+// Variables de estado
 let hasKey = false;
 let doorOpen = false;
 let levelWon = false;
-let playersFinished = []; // IDs de los que cruzaron la puerta
+let playersFinished = [];
 let gameStarted = false;
-
-const key = Matter.Bodies.circle(1000, 600, 15, { isStatic: true, isSensor: true });
-const door = Matter.Bodies.rectangle(1150, 610, 60, 80, { isStatic: true, isSensor: true });
-
-
 let currentLevel = 1;
 let levelPlatforms = [];
 
+// BOTONES Y MUROS (Nivel 2)
+let btn1Active = false;
+let btn2Active = false;
+
+const button1 = Matter.Bodies.rectangle(100, 220, 50, 15, {
+    isStatic: true,
+    isSensor: true
+});
+
+const button2 = Matter.Bodies.rectangle(640, 640, 50, 15, {
+    isStatic: true,
+    isSensor: true
+});
+
+// Trampolín (Nivel 2)
+const trampolin = Matter.Bodies.rectangle(200, 235, 30, 10, {
+    isStatic: true,
+    isSensor: true,
+    label: "trampolin"
+});
+
+// Muros que desaparecen
+const wallKey = Matter.Bodies.rectangle(1000, 150, 20, 200, {
+    isStatic: true
+});
+
+const wallGarage = Matter.Bodies.rectangle(1000, 575, 20, 150, {
+    isStatic: true
+});
+
+// Entidades principales
+const key = Matter.Bodies.circle(1150, 150, 20, {
+    isStatic: true,
+    isSensor: true
+});
+
+const door = Matter.Bodies.rectangle(1180, 610, 60, 80, {
+    isStatic: true,
+    isSensor: true
+});
+
 function cargarNivel(num) {
-    // 1. Limpiamos las plataformas anteriores del mundo físico
     levelPlatforms.forEach(p => Matter.Composite.remove(world, p));
     levelPlatforms = [];
 
+    // Reset
+    btn1Active = false;
+    btn2Active = false;
+    hasKey = false;
+    doorOpen = false;
+
     if (num === 1) {
-        // Tu nivel original de los escalones
         levelPlatforms = [
             Matter.Bodies.rectangle(520, 625, 120, 50, { isStatic: true, friction: 0 }),
             Matter.Bodies.rectangle(630, 600, 120, 100, { isStatic: true, friction: 0 }),
             Matter.Bodies.rectangle(740, 575, 120, 150, { isStatic: true, friction: 0 })
         ];
+
         Matter.Body.setPosition(key, { x: 900, y: 400 });
         Matter.Body.setPosition(door, { x: 1150, y: 610 });
-    } 
-    else if (num === 2) {
-        // NIVEL 2: La plataforma del medio es alta y chica
-        // Ideal para que tengan que saltar uno arriba del otro
+
+        Matter.Body.setPosition(wallKey, { x: -5000, y: 0 });
+        Matter.Body.setPosition(wallGarage, { x: -5000, y: 0 });
+
+    } else if (num === 2) {
         levelPlatforms = [
-            Matter.Bodies.rectangle(640, 400, 150, 20, { isStatic: true, friction: 0 }), // Plataforma flotante
-            Matter.Bodies.rectangle(300, 550, 100, 20, { isStatic: true, friction: 0 })  // Escalón de ayuda
+            // HABITACIÓN LLAVE
+            Matter.Bodies.rectangle(1150, 250, 300, 20, { isStatic: true }),
+            Matter.Bodies.rectangle(1150, 50, 300, 20, { isStatic: true }),
+            Matter.Bodies.rectangle(1000, 150, 20, 200, { isStatic: true }),
+            Matter.Bodies.rectangle(1300, 150, 20, 200, { isStatic: true }),
+
+            // HABITACIÓN PUERTA
+            Matter.Bodies.rectangle(1150, 650, 300, 20, { isStatic: true }),
+            Matter.Bodies.rectangle(1150, 500, 300, 20, { isStatic: true }),
+            Matter.Bodies.rectangle(1000, 575, 20, 150, { isStatic: true }),
+            Matter.Bodies.rectangle(1300, 575, 20, 150, { isStatic: true }),
+
+            // PARKOUR IZQUIERDA
+            Matter.Bodies.rectangle(150, 550, 100, 20, { isStatic: true }),
+            Matter.Bodies.rectangle(350, 420, 100, 20, { isStatic: true }),
+            
+            // PLATAFORMA BOTÓN LLAVE Y TRAMPOLÍN
+            Matter.Bodies.rectangle(150, 250, 120, 20, { isStatic: true }),
+            trampolin,
+
+            wallKey,
+            wallGarage,
+            button1,
+            button2
         ];
-        Matter.Body.setPosition(key, { x: 640, y: 250 }); // Llave bien arriba
+
+        // Botón 1 a la IZQUIERDA
+        Matter.Body.setPosition(button1, { x: 150, y: 240 });
+        // Trampolín al lado del botón
+        Matter.Body.setPosition(trampolin, { x: 200, y: 235 });
+        // Botón 2 (Muro puerta)
+        Matter.Body.setPosition(button2, { x: 640, y: 645 });
+
+        Matter.Body.setPosition(key, { x: 1150, y: 150 });
         Matter.Body.setPosition(door, { x: 1150, y: 610 });
+        Matter.Body.setPosition(wallKey, { x: 1000, y: 150 });
+        Matter.Body.setPosition(wallGarage, { x: 1000, y: 575 });
     }
 
-    else {
-        // SI YA NO HAY MÁS NIVELES (Nivel 3 en adelante)
-        currentLevel = 1; // Reseteamos el contador internamente
-        // Opcional: Podés mover la puerta y la llave afuera para que no se vean
-        Matter.Body.setPosition(key, { x: -1000, y: -1000 });
-        Matter.Body.setPosition(door, { x: -1000, y: -1000 });
-    }
-
-    // 2. Agregamos las nuevas al mundo
     Matter.Composite.add(world, levelPlatforms);
 }
 
-// Llamada inicial para que arranque el nivel 1 apenas abrís el server
+// Inicialización
 cargarNivel(1);
-
 Matter.Composite.add(world, [ground, leftWall, rightWall, key, door]);
-Matter.Body.setPosition(key, { x: 900, y: 400 });
 
 const players = {};
 const colors = ["#FF0000", "#00FF00", "#0000FF", "#FFFF00"];
@@ -88,52 +151,51 @@ function resetLevel() {
     levelWon = false;
     gameStarted = true;
     playersFinished = [];
+
     Object.values(players).forEach((p) => {
         p.isFinished = false;
-        Matter.Body.setPosition(p.body, { x: 200, y: 600 });
+        Matter.Body.setPosition(p.body, { x: 150, y: 600 });
         Matter.Body.setVelocity(p.body, { x: 0, y: 0 });
     });
 }
 
-// --- COLISIONES ---
+// Colisiones
 Matter.Events.on(engine, "collisionStart", (event) => {
     event.pairs.forEach((pair) => {
         const { bodyA, bodyB } = pair;
-
-        // Buscamos si el cuerpo involucrado es de un jugador
         const playerEntry = Object.entries(players).find(([id, p]) => p.body === bodyA || p.body === bodyB);
 
         if (playerEntry) {
             const [id, p] = playerEntry;
 
-            // 1. Recoger Llave
-            if ((bodyA === key || bodyB === key) && !hasKey) {
-                hasKey = true;
-                console.log("Llave recogida");
+            // BOTÓN 1 (Permanente)
+            if (bodyA === button1 || bodyB === button1) {
+                btn1Active = true;
+                Matter.Body.setPosition(wallKey, { x: -5000, y: 0 });
             }
 
-            // 2. Tocar la puerta
-            if ((bodyA === door || bodyB === door) && hasKey) {
-                // Si alguien llega con la llave, la puerta se abre para siempre en este nivel
-                if (!doorOpen) {
-                    doorOpen = true;
-                    console.log("Puerta abierta");
+            // TRAMPOLÍN
+            if (bodyA.label === "trampolin" || bodyB.label === "trampolin") {
+                Matter.Body.setVelocity(p.body, { x: p.body.velocity.x, y: -25 }); // Impulso vertical
+            }
+
+            // LLAVE
+            if ((bodyA === key || bodyB === key) && !hasKey) {
+                if (currentLevel === 1 || btn1Active) {
+                    hasKey = true;
                 }
+            }
 
-                // Si el jugador entra y no ha terminado aún
-                if (!p.isFinished) {
-                    p.isFinished = true;
-                    playersFinished.push(id);
-                    
-                    // Lo mandamos "fuera" del mundo físico
-                    Matter.Body.setPosition(p.body, { x: -2000, y: -2000 });
-                    console.log(`Jugador ${id} entró`);
-
-                    // Verificar victoria: ¿Todos los conectados entraron?
-                    const totalPlayers = Object.keys(players).length;
-                    if (playersFinished.length === totalPlayers && totalPlayers > 0) {
-                        levelWon = true;
-                        console.log("¡Nivel Ganado!");
+            // PUERTA
+            if ((bodyA === door || bodyB === door) && hasKey) {
+                if (currentLevel === 1 || btn2Active) {
+                    doorOpen = true;
+                    if (!p.isFinished) {
+                        p.isFinished = true;
+                        playersFinished.push(id);
+                        Matter.Body.setPosition(p.body, { x: -2000, y: -2000 });
+                        const totalPlayers = Object.keys(players).length;
+                        if (playersFinished.length === totalPlayers && totalPlayers > 0) levelWon = true;
                     }
                 }
             }
@@ -141,141 +203,104 @@ Matter.Events.on(engine, "collisionStart", (event) => {
     });
 });
 
-function broadcastPlayerCount() {
-    const count = Object.keys(players).length;
-    const canStart = count >= 1; // Modo Test
-    io.emit("playerCountUpdate", { count, canStart });
-}
-
 io.on("connection", (socket) => {
-    broadcastPlayerCount();
+    const count = Object.keys(players).length;
+    io.emit("playerCountUpdate", { count, canStart: count >= 1 });
 
     socket.on("joinGame", () => {
         if (players[socket.id]) return;
-
         const playerColor = colors[Object.keys(players).length % colors.length];
         const playerBody = Matter.Bodies.rectangle(200, 600, 32, 48, {
-            friction: 0,
-            frictionStatic: 0,
+            friction: 0.1,
             frictionAir: 0.05,
             inertia: Infinity,
             restitution: 0
         });
 
-        players[socket.id] = {
-            body: playerBody,
-            color: playerColor,
-            moveDir: 0,
-            wantsToJump: false,
-            isFinished: false // Estado individual
-        };
-
+        players[socket.id] = { body: playerBody, color: playerColor, moveDir: 0, wantsToJump: false, isFinished: false };
         Matter.Composite.add(world, playerBody);
         socket.emit("init", { color: playerColor });
-        broadcastPlayerCount();
+        const newCount = Object.keys(players).length;
+        io.emit("playerCountUpdate", { count: newCount, canStart: newCount >= 1 });
     });
 
     socket.on("move", (dir) => {
         if (players[socket.id]) {
             players[socket.id].moveDir = dir.x;
-            players[socket.id].wantsToJump = dir.y < 0;
+            if (dir.y < 0) players[socket.id].wantsToJump = true;
         }
     });
 
     socket.on("restart", () => {
-        if (levelWon) {
-            currentLevel++;
-            // Si el nivel que sigue ya no existe, volvemos al 1
-            if (currentLevel > 2) {
-                currentLevel = 1;
-            }
-        }
+        if (levelWon) currentLevel = currentLevel === 1 ? 2 : 1;
         cargarNivel(currentLevel);
-        resetLevel(); 
+        resetLevel();
     });
 
     socket.on("disconnect", () => {
         if (players[socket.id]) {
             Matter.Composite.remove(world, players[socket.id].body);
             delete players[socket.id];
-            // Si alguien se va, recalculamos si los que quedan ya terminaron
-            const totalPlayers = Object.keys(players).length;
-            if (playersFinished.length >= totalPlayers && totalPlayers > 0) {
-                levelWon = true;
-            }
-            broadcastPlayerCount();
+            const newCount = Object.keys(players).length;
+            io.emit("playerCountUpdate", { count: newCount, canStart: newCount >= 1 });
         }
     });
 });
 
 Matter.Events.on(engine, "beforeUpdate", () => {
     if (!gameStarted) return;
+
     Object.values(players).forEach((p) => {
         if (!p.isFinished) {
-            // AUMENTAR VELOCIDAD X: Cambiamos 5 por 7 para que sea más rápido
             Matter.Body.setVelocity(p.body, { x: p.moveDir * 7, y: p.body.velocity.y });
-
-            // CORRECCIÓN SALTO INFINITO Y ALTURA:
-            // Usamos un umbral pequeño (0.1) para saber si está "quieto" en vertical
             if (p.wantsToJump && Math.abs(p.body.velocity.y) < 0.1) {
-                // REDUCIR SALTO: Cambiamos -12 por -10 (ajustalo a gusto)
-                Matter.Body.setVelocity(p.body, { x: p.body.velocity.x, y: -20 });
-                p.wantsToJump = false;
-            } else if (p.wantsToJump) {
-                // Si quiso saltar pero no estaba en el suelo, le apagamos el deseo 
-                // para que no salte apenas toque una plataforma por error
-                p.wantsToJump = false; 
+                Matter.Body.setVelocity(p.body, { x: p.body.velocity.x, y: -18 });
             }
+            p.wantsToJump = false;
         }
     });
+
+    // LÓGICA DE BOTÓN DE PRESIÓN (NIVEL 2)
+    if (currentLevel === 2) {
+        let alguienPisando = false;
+        Object.values(players).forEach(p => {
+            if (Matter.Query.collides(p.body, [button2]).length > 0) {
+                alguienPisando = true;
+            }
+        });
+
+        if (alguienPisando) {
+            btn2Active = true;
+            Matter.Body.setPosition(wallGarage, { x: -5000, y: 0 }); // Muro abre
+        } else {
+            btn2Active = false;
+            Matter.Body.setPosition(wallGarage, { x: 1000, y: 575 }); // Muro cierra
+        }
+    }
 });
 
 setInterval(() => {
+    if (gameStarted) Matter.Engine.update(engine, 1000 / 60);
 
-  if (gameStarted) { 
-    Matter.Engine.update(engine, 1000 / 60);
-  }
-    // Solo enviamos los jugadores que NO han entrado a la puerta
-    const entities = Object.keys(players)
-        .filter(id => !players[id].isFinished)
-        .map((id) => ({
-            id,
-            x: players[id].body.position.x,
-            y: players[id].body.position.y,
-            color: players[id].color,
-            moveDir: players[id].moveDir,
-            type: "player",
-        }));
-        // Dentro del setInterval, cuando armás el array entities:
+    const entities = Object.keys(players).filter(id => !players[id].isFinished).map((id) => ({
+        id, x: players[id].body.position.x, y: players[id].body.position.y, color: players[id].color, moveDir: players[id].moveDir, type: "player"
+    }));
+
     levelPlatforms.forEach((step, index) => {
+        let color = "#444";
+        if (step === button1) color = btn1Active ? "#00FF00" : "#FF0000";
+        if (step === button2) color = btn2Active ? "#00FF00" : "#FF0000";
+        if (step === trampolin) color = "#FF00FF"; // Magenta para el trampolín
         entities.push({
-            id: `step_${index}`,
-            x: step.position.x,
-            y: step.position.y,
-            w: step.bounds.max.x - step.bounds.min.x,
-            h: step.bounds.max.y - step.bounds.min.y,
-            type: "platform"
+            id: `step_${index}`, x: step.position.x, y: step.position.y,
+            w: step.bounds.max.x - step.bounds.min.x, h: step.bounds.max.y - step.bounds.min.y,
+            type: "platform", color
         });
     });
 
-    if (!hasKey) {
-        entities.push({ id: "key", x: key.position.x, y: key.position.y, type: "key" });
-    }
-
-    entities.push({
-        id: "door",
-        x: door.position.x,
-        y: door.position.y,
-        type: "door",
-        isOpen: doorOpen,
-    });
-
-    entities.push({
-        id: "ground",
-        x: ground.position.x,
-        y: ground.position.y,
-        type: "ground",
-    });
+    if (!hasKey) entities.push({ id: "key", x: key.position.x, y: key.position.y, type: "key" });
+    entities.push({ id: "door", x: door.position.x, y: door.position.y, type: "door", isOpen: doorOpen });
+    entities.push({ id: "ground", x: ground.position.x, y: ground.position.y, type: "ground" });
 
     io.emit("stateUpdate", { entities, levelWon, currentLevel });
 }, 1000 / 60);
