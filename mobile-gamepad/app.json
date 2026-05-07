@@ -1,9 +1,9 @@
 {
   "expo": {
-    "name": "mobile-gamepad",
+    "name": "Pico Park Control",
     "slug": "mobile-gamepad",
     "version": "1.0.0",
-    "orientation": "portrait",
+    "orientation": "landscape",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
@@ -16,6 +16,7 @@
       "supportsTablet": true
     },
     "android": {
+      "package": "com.tuusuario.gamepad",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
@@ -24,6 +25,11 @@
     },
     "web": {
       "favicon": "./assets/favicon.png"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "db35a04f-849e-4cdb-a7f8-5c90daa7575d"
+      }
     }
   }
 }
