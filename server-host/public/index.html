@@ -27,7 +27,7 @@
         left: 0;
         width: 100%;
         height: 100%;
-        background: rgba(0, 0, 0, 0);
+        background: rgba(0, 0, 0, 1);
 
         display: flex;
         flex-direction: column;
@@ -80,21 +80,12 @@
   </head>
 
   <body>
-
     <div id="winOverlay">
+      <h1 id="overlayTitle">ESPERANDO JUGADORES</h1>
 
-      <h1 id="overlayTitle">
-        ESPERANDO JUGADORES
-      </h1>
+      <div id="playerStatus">Conectados: 0/4</div>
 
-      <div id="playerStatus">
-        Conectados: 0/4
-      </div>
-
-      <button id="btnRestart" disabled>
-        EMPEZAR JUEGO
-      </button>
-
+      <button id="btnRestart" disabled>EMPEZAR JUEGO</button>
     </div>
 
     <script src="/socket.io/socket.io.js"></script>
@@ -102,7 +93,6 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.19.0/matter.min.js"></script>
 
     <script>
-
       const socket = io();
 
       const engine = Matter.Engine.create();
@@ -146,20 +136,19 @@
       imgDoorOpen.src = "/puerta_abierta.png";
 
       const DOOR_CONFIG = {
-
         closed: {
           width: 80,
           height: 140,
           offsetX: 50,
-          offsetY: 94
+          offsetY: 94,
         },
 
         open: {
           width: 105.7,
           height: 140,
           offsetX: 50,
-          offsetY: 94
-        }
+          offsetY: 94,
+        },
       };
 
       // =========================
@@ -167,26 +156,25 @@
       // =========================
 
       socket.on("playerCountUpdate", (data) => {
-
-        playerStatus.innerText = `Conectados: ${data.count}/2`;
+        playerStatus.innerText = `Conectados: ${data.count}/4`;
 
         if (!levelWon) {
-
           overlay.style.display = "flex";
 
           if (data.canStart) {
-
             btnRestart.disabled = false;
 
             overlayTitle.innerText = "¡LISTOS PARA JUGAR!";
 
             btnRestart.innerText = "EMPEZAR JUEGO";
-
           } else {
-
             btnRestart.disabled = true;
-
-            overlayTitle.innerText = "ESPERANDO JUGADORES";
+            // Texto dinámico según falten o sobren jugadores
+            if (data.count < 2) {
+              overlayTitle.innerText = "ESPERANDO JUGADORES (MIN. 2)";
+            } else if (data.count > 4) {
+              overlayTitle.innerText = "DEMASIADOS JUGADORES (MÁX. 4)";
+            }
           }
         }
       });
@@ -196,7 +184,6 @@
       // =========================
 
       btnRestart.onclick = () => {
-
         overlay.style.display = "none";
 
         socket.emit("restart");
@@ -207,27 +194,18 @@
       // =========================
 
       Matter.Events.on(render, "afterRender", () => {
-
         const ctx = render.context;
 
         // =========================
         // SUELO
         // =========================
 
-        const ground = currentEntities.find(
-          e => e.type === "ground"
-        );
+        const ground = currentEntities.find((e) => e.type === "ground");
 
         if (ground) {
-
           ctx.fillStyle = "#333";
 
-          ctx.fillRect(
-            ground.x - 640,
-            ground.y - 30,
-            1280,
-            60
-          );
+          ctx.fillRect(ground.x - 640, ground.y - 30, 1280, 60);
         }
 
         // =========================
@@ -235,47 +213,31 @@
         // =========================
 
         currentEntities
-          .filter(e => e.type === "platform")
-          .forEach(plt => {
-
+          .filter((e) => e.type === "platform")
+          .forEach((plt) => {
             ctx.fillStyle = plt.color || "#444";
 
-            ctx.fillRect(
-              plt.x - (plt.w / 2),
-              plt.y - (plt.h / 2),
-              plt.w,
-              plt.h
-            );
+            ctx.fillRect(plt.x - plt.w / 2, plt.y - plt.h / 2, plt.w, plt.h);
           });
 
         // =========================
         // PUERTA
         // =========================
 
-        const door = currentEntities.find(
-          e => e.type === "door"
-        );
+        const door = currentEntities.find((e) => e.type === "door");
 
         if (door) {
+          const config = door.isOpen ? DOOR_CONFIG.open : DOOR_CONFIG.closed;
 
-          const config =
-            door.isOpen
-              ? DOOR_CONFIG.open
-              : DOOR_CONFIG.closed;
-
-          const img =
-            door.isOpen
-              ? imgDoorOpen
-              : imgDoorClosed;
+          const img = door.isOpen ? imgDoorOpen : imgDoorClosed;
 
           if (img.complete) {
-
             ctx.drawImage(
               img,
               door.x - config.offsetX,
               door.y - config.offsetY,
               config.width,
-              config.height
+              config.height,
             );
           }
         }
@@ -284,19 +246,10 @@
         // LLAVE
         // =========================
 
-        const keyEnt = currentEntities.find(
-          e => e.type === "key"
-        );
+        const keyEnt = currentEntities.find((e) => e.type === "key");
 
         if (keyEnt && imgKey.complete) {
-
-          ctx.drawImage(
-            imgKey,
-            keyEnt.x - 25,
-            keyEnt.y - 45,
-            20,
-            51.2
-          );
+          ctx.drawImage(imgKey, keyEnt.x - 25, keyEnt.y - 45, 20, 51.2);
         }
 
         // =========================
@@ -304,63 +257,34 @@
         // =========================
 
         currentEntities
-          .filter(e => e.type === "player")
-          .forEach(p => {
-
+          .filter((e) => e.type === "player")
+          .forEach((p) => {
             ctx.fillStyle = p.color;
 
-            ctx.fillRect(
-              p.x - 16,
-              p.y - 24,
-              32,
-              48
-            );
+            ctx.fillRect(p.x - 16, p.y - 24, 32, 48);
 
             ctx.strokeStyle = "black";
 
-            ctx.strokeRect(
-              p.x - 16,
-              p.y - 24,
-              32,
-              48
-            );
+            ctx.strokeRect(p.x - 16, p.y - 24, 32, 48);
 
             // OJOS
             ctx.fillStyle = "white";
 
-            let off =
-              p.moveDir >= 0
-                ? -6
-                : -14;
+            let off = p.moveDir >= 0 ? -6 : -14;
 
-            ctx.fillRect(
-              p.x + off,
-              p.y - 12,
-              8,
-              8
-            );
+            ctx.fillRect(p.x + off, p.y - 12, 8, 8);
 
-            ctx.fillRect(
-              p.x + off + 12,
-              p.y - 12,
-              8,
-              8
-            );
+            ctx.fillRect(p.x + off + 12, p.y - 12, 8, 8);
 
             ctx.fillStyle = "black";
 
-            ctx.fillRect(
-              p.x + off + (p.moveDir >= 0 ? 5 : 1),
-              p.y - 10,
-              3,
-              3
-            );
+            ctx.fillRect(p.x + off + (p.moveDir >= 0 ? 5 : 1), p.y - 10, 3, 3);
 
             ctx.fillRect(
               p.x + off + (p.moveDir >= 0 ? 17 : 13),
               p.y - 10,
               3,
-              3
+              3,
             );
           });
       });
@@ -370,56 +294,41 @@
       // =========================
 
       socket.on("stateUpdate", (data) => {
-
         currentEntities = data.entities;
 
+        if (data.gameStarted && !data.levelWon) {
+          overlay.style.display = "none";
+        }
+
         currentEntities.forEach((ent) => {
-
           if (!entityRenders[ent.id]) {
+            const isPlatform = ent.type === "platform";
 
-            const isPlatform =
-              ent.type === "platform";
+            const w = isPlatform ? ent.w : ent.type === "ground" ? 1280 : 32;
 
-            const w =
-              isPlatform
-                ? ent.w
-                : (ent.type === "ground" ? 1280 : 32);
+            const h = isPlatform ? ent.h : ent.type === "ground" ? 60 : 48;
 
-            const h =
-              isPlatform
-                ? ent.h
-                : (ent.type === "ground" ? 60 : 48);
-
-            entityRenders[ent.id] =
-              Matter.Bodies.rectangle(
-                ent.x,
-                ent.y,
-                w,
-                h,
-                {
-                  isStatic: true,
-
-                  render: {
-                    visible: false,
-                    fillStyle: ent.color || "#555"
-                  }
-                }
-              );
-
-            Matter.Composite.add(
-              engine.world,
-              entityRenders[ent.id]
-            );
-
-          } else {
-
-            Matter.Body.setPosition(
-              entityRenders[ent.id],
+            entityRenders[ent.id] = Matter.Bodies.rectangle(
+              ent.x,
+              ent.y,
+              w,
+              h,
               {
-                x: ent.x,
-                y: ent.y
-              }
+                isStatic: true,
+
+                render: {
+                  visible: false,
+                  fillStyle: ent.color || "#555",
+                },
+              },
             );
+
+            Matter.Composite.add(engine.world, entityRenders[ent.id]);
+          } else {
+            Matter.Body.setPosition(entityRenders[ent.id], {
+              x: ent.x,
+              y: ent.y,
+            });
           }
         });
 
@@ -428,32 +337,23 @@
         // =========================
 
         if (data.levelWon && !levelWon) {
-
           levelWon = true;
 
           overlay.style.display = "flex";
 
           if (data.currentLevel === 1) {
+            overlayTitle.innerHTML = "¡NIVEL 1 COMPLETADO!";
 
-            overlayTitle.innerHTML =
-              "¡NIVEL 1 COMPLETADO!";
-
-            btnRestart.innerText =
-              "SIGUIENTE NIVEL";
-
+            btnRestart.innerText = "SIGUIENTE NIVEL";
           } else if (data.currentLevel === 2) {
-
             overlayTitle.innerHTML =
               "¡NIVEL 2 COMPLETADO!<br><span style='font-size:40px;color:#00FF00;'>FIN DEL JUEGO</span>";
 
-            btnRestart.innerText =
-              "REINICIAR JUEGO";
+            btnRestart.innerText = "REINICIAR JUEGO";
           }
 
           btnRestart.disabled = false;
-
         } else if (!data.levelWon) {
-
           levelWon = false;
         }
 
@@ -461,25 +361,16 @@
         // LIMPIAR ENTIDADES VIEJAS
         // =========================
 
-        const ids = currentEntities.map(
-          e => e.id
-        );
+        const ids = currentEntities.map((e) => e.id);
 
-        Object.keys(entityRenders).forEach(id => {
-
+        Object.keys(entityRenders).forEach((id) => {
           if (!ids.includes(id)) {
-
-            Matter.Composite.remove(
-              engine.world,
-              entityRenders[id]
-            );
+            Matter.Composite.remove(engine.world, entityRenders[id]);
 
             delete entityRenders[id];
           }
         });
       });
-
     </script>
-
   </body>
 </html>

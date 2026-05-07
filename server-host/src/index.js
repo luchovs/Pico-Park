@@ -11,10 +11,12 @@ app.use(express.static("public"));
 
 const engine = Matter.Engine.create();
 const { world } = engine;
-engine.world.gravity.y = 3;
+engine.world.gravity.y = 2.8;
 
 const WIDTH = 1280;
 const HEIGHT = 720;
+const MAX_PLAYERS = 4;
+const MIN_PLAYERS = 2;
 
 // Variables de estado
 const players = {};
@@ -22,12 +24,12 @@ const colors = ["#FF0000", "#00FF00", "#0000FF", "#FFFF00"];
 let hasKey = false,
   doorOpen = false,
   levelWon = false;
+let keyHolder = null; // ID del jugador que tiene la llave
+let keySpawnPos = { x: 900, y: 400 }; // Posición de respawn de la llave
 
-// Variables de los botones e interruptores permanentes
-let btn1Active = false;
-let btn2Active = false;
-let barreraGarajeAbierta = false; // <-- NUEVA VARIABLE: Una vez activa, se queda así
-
+let btn1Active = false,
+  btn2Active = false,
+  barreraGarajeAbierta = false;
 let playersFinished = [];
 let gameStarted = false,
   currentLevel = 1;
@@ -37,6 +39,7 @@ let levelPlatforms = [],
 // Escenario base
 const ground = Matter.Bodies.rectangle(WIDTH / 2, 680, WIDTH, 60, {
   isStatic: true,
+  friction: 0,
 });
 const leftWall = Matter.Bodies.rectangle(0, HEIGHT / 2, 20, HEIGHT, {
   isStatic: true,
@@ -47,28 +50,20 @@ const rightWall = Matter.Bodies.rectangle(WIDTH, HEIGHT / 2, 20, HEIGHT, {
   friction: 0,
 });
 
-// Entidades
-const key = Matter.Bodies.circle(1150, 150, 20, {
-  isStatic: true,
-  isSensor: true,
-});
+// Entidades (La llave empieza en su spawn)
+const key = Matter.Bodies.circle(0, 0, 20, { isStatic: true, isSensor: true });
 const door = Matter.Bodies.rectangle(1180, 610, 60, 80, {
   isStatic: true,
   isSensor: true,
 });
-
-// BOTÓN 1 (Sigue igual, abre la pared de la llave mientras se pisa)
 const button1 = Matter.Bodies.rectangle(120, 240, 50, 15, {
   isStatic: true,
   isSensor: true,
 });
-
-// BOTÓN 2 (El central sobre los pinchos que abre la barrera final permanentemente)
 const button2 = Matter.Bodies.rectangle(640, 645, 50, 15, {
   isStatic: true,
   isSensor: true,
 });
-
 const wallKey = Matter.Bodies.rectangle(1050, 150, 20, 200, {
   isStatic: true,
   friction: 0,
@@ -85,13 +80,15 @@ function cargarNivel(num) {
   spikes = [];
   btn1Active = false;
   btn2Active = false;
-  barreraGarajeAbierta = false; // Resetear el estado permanente de la barrera
+  barreraGarajeAbierta = false;
   hasKey = false;
   doorOpen = false;
   levelWon = false;
+  keyHolder = null;
   playersFinished = [];
 
   if (num === 1) {
+    keySpawnPos = { x: 900, y: 400 };
     levelPlatforms = [
       Matter.Bodies.rectangle(520, 625, 120, 50, {
         isStatic: true,
@@ -106,12 +103,11 @@ function cargarNivel(num) {
         friction: 0,
       }),
     ];
-    Matter.Body.setPosition(key, { x: 900, y: 400 });
     Matter.Body.setPosition(door, { x: 1150, y: 610 });
     Matter.Body.setPosition(wallKey, { x: -5000, y: 0 });
     Matter.Body.setPosition(wallGarage, { x: -5000, y: 0 });
   } else if (num === 2) {
-    // YA NO ESTÁ EL BOTÓN DE RESCATE ACÁ
+    keySpawnPos = { x: 1150, y: 150 };
     levelPlatforms = [
       Matter.Bodies.rectangle(120, 550, 100, 20, {
         isStatic: true,
@@ -164,11 +160,12 @@ function cargarNivel(num) {
     ];
     Matter.Body.setPosition(button1, { x: 120, y: 240 });
     Matter.Body.setPosition(button2, { x: 640, y: 645 });
-    Matter.Body.setPosition(key, { x: 1150, y: 150 });
     Matter.Body.setPosition(door, { x: 1150, y: 610 });
     Matter.Body.setPosition(wallKey, { x: 1050, y: 150 });
     Matter.Body.setPosition(wallGarage, { x: 1020, y: 575 });
   }
+
+  Matter.Body.setPosition(key, keySpawnPos);
   Matter.Composite.add(world, [...levelPlatforms, ...spikes]);
 }
 
@@ -184,61 +181,78 @@ Matter.Events.on(engine, "collisionStart", (event) => {
     if (!pEntry) return;
     const [id, p] = pEntry;
 
+    // RESPRAWN DE JUGADOR Y LLAVE
     if (bodyA.label === "spike" || bodyB.label === "spike") {
+      if (keyHolder === id) {
+        // Si el que muere tiene la llave
+        keyHolder = null;
+        hasKey = false;
+        doorOpen = false;
+        Matter.Body.setPosition(key, keySpawnPos); // Reaparece la llave
+      }
       Matter.Body.setPosition(p.body, { x: 150, y: 600 });
       Matter.Body.setVelocity(p.body, { x: 0, y: 0 });
     }
 
-    if (
-      (bodyA === key || bodyB === key) &&
-      !hasKey &&
-      (currentLevel === 1 || btn1Active)
-    ) {
-      hasKey = true;
-      doorOpen = true;
+    // AGARRAR LLAVE
+    if ((bodyA === key || bodyB === key) && !hasKey) {
+      if (currentLevel === 1 || btn1Active) {
+        hasKey = true;
+        keyHolder = id; // Este jugador ahora "lleva" la llave
+        doorOpen = true;
+        Matter.Body.setPosition(key, { x: -5000, y: -5000 }); // La sacamos del mapa
+      }
     }
   });
 });
 
 io.on("connection", (socket) => {
-  io.emit("playerCountUpdate", {
-    count: Object.keys(players).length,
-    canStart: true,
-  });
+  const emitCount = () => {
+    const count = Object.keys(players).length;
+    io.emit("playerCountUpdate", {
+      count: count,
+      canStart: count >= MIN_PLAYERS && count <= MAX_PLAYERS,
+    });
+  };
+
+  emitCount();
 
   socket.on("joinGame", () => {
+    const count = Object.keys(players).length;
+    if (count >= MAX_PLAYERS) return;
     if (players[socket.id]) return;
+
     const pBody = Matter.Bodies.rectangle(200, 600, 32, 48, {
-      friction: 0.8,
-      frictionAir: 0.05,
+      friction: 0,
+      frictionStatic: 0,
+      frictionAir: 0.02,
       inertia: Infinity,
       restitution: 0,
     });
     players[socket.id] = {
       body: pBody,
-      color: colors[Object.keys(players).length % colors.length],
+      color: colors[count % colors.length],
       moveDir: 0,
       wantsToJump: false,
       isFinished: false,
     };
     Matter.Composite.add(world, pBody);
     socket.emit("init", { color: players[socket.id].color });
-    io.emit("playerCountUpdate", {
-      count: Object.keys(players).length,
-      canStart: true,
-    });
+    emitCount();
   });
 
   socket.on("move", (dir) => {
-    if (players[socket.id]) players[socket.id].moveDir = dir.x;
-    if (dir.y < 0 && players[socket.id]) players[socket.id].wantsToJump = true;
+    if (players[socket.id]) {
+      players[socket.id].moveDir = dir.x;
+      if (dir.y < 0) players[socket.id].wantsToJump = true;
+    }
   });
 
   socket.on("restart", () => {
+    const count = Object.keys(players).length;
+    if (count < MIN_PLAYERS) return;
     if (levelWon || !gameStarted) {
-      if (levelWon) {
-        currentLevel = currentLevel === 1 ? 2 : 1;
-      }
+      if (levelWon) currentLevel = currentLevel === 1 ? 2 : 1;
       cargarNivel(currentLevel);
       resetLevel();
     }
@@ -246,13 +260,24 @@ io.on("connection", (socket) => {
 
   socket.on("disconnect", () => {
     if (players[socket.id]) {
+      if (keyHolder === socket.id) {
+        // Si se desconecta el portador, la llave vuelve
+        keyHolder = null;
+        hasKey = false;
+        doorOpen = false;
+        Matter.Body.setPosition(key, keySpawnPos);
+      }
       Matter.Composite.remove(world, players[socket.id].body);
       delete players[socket.id];
       playersFinished = playersFinished.filter((fid) => fid !== socket.id);
-      io.emit("playerCountUpdate", {
-        count: Object.keys(players).length,
-        canStart: true,
-      });
+      const count = Object.keys(players).length;
+      if (count < MIN_PLAYERS) {
+        gameStarted = false;
+        levelWon = false;
+      } else if (gameStarted && playersFinished.length === count) {
+        levelWon = true;
+      }
+      emitCount();
     }
   });
 });
@@ -261,6 +286,7 @@ function resetLevel() {
   hasKey = false;
   doorOpen = false;
   levelWon = false;
+  keyHolder = null;
   gameStarted = true;
   barreraGarajeAbierta = false;
   playersFinished = [];
@@ -269,9 +295,11 @@ function resetLevel() {
     Matter.Body.setPosition(p.body, { x: 150, y: 600 });
     Matter.Body.setVelocity(p.body, { x: 0, y: 0 });
   });
+  Matter.Body.setPosition(key, keySpawnPos);
 }
 
 Matter.Events.on(engine, "beforeUpdate", () => {
+  if (!gameStarted) return;
   const idsPartida = Object.keys(players);
 
   idsPartida.forEach((id) => {
@@ -281,10 +309,11 @@ Matter.Events.on(engine, "beforeUpdate", () => {
         x: p.moveDir * 7,
         y: p.body.velocity.y,
       });
+      if (p.body.velocity.y > 0) p.body.force.y += 0.005;
 
       if (p.wantsToJump) {
         const tocaPuerta = Matter.Query.collides(p.body, [door]).length > 0;
-        // Ahora para entrar al nivel 2 requiere que la barrera esté abierta permanentemente
+        // Solo puede entrar si el EQUIPO tiene la llave (hasKey)
         if (
           hasKey &&
           tocaPuerta &&
@@ -292,9 +321,10 @@ Matter.Events.on(engine, "beforeUpdate", () => {
         ) {
           p.isFinished = true;
           playersFinished.push(id);
+          if (keyHolder === id) keyHolder = null; // Si el portador entra, la llave se "consume"
           Matter.Body.setPosition(p.body, { x: -5000, y: -5000 });
         } else if (Math.abs(p.body.velocity.y) < 0.1) {
-          Matter.Body.setVelocity(p.body, { x: p.body.velocity.x, y: -40 });
+          Matter.Body.setVelocity(p.body, { x: p.body.velocity.x, y: -18 });
         }
       }
       p.wantsToJump = false;
@@ -303,7 +333,7 @@ Matter.Events.on(engine, "beforeUpdate", () => {
 
   if (
     gameStarted &&
-    idsPartida.length > 0 &&
+    idsPartida.length >= MIN_PLAYERS &&
     playersFinished.length === idsPartida.length
   ) {
     levelWon = true;
@@ -316,30 +346,20 @@ Matter.Events.on(engine, "beforeUpdate", () => {
         Object.values(players).map((p) => p.body),
       ).length > 0;
     Matter.Body.setPosition(wallKey, { x: btn1Active ? -5000 : 1050, y: 150 });
-
     btn2Active =
       Matter.Query.collides(
         button2,
         Object.values(players).map((p) => p.body),
       ).length > 0;
-
-    // Si alguien toca el botón 2, la barrera se abre para siempre en este nivel
-    if (btn2Active) {
-      barreraGarajeAbierta = true;
-    }
-
-    if (barreraGarajeAbierta) {
+    if (btn2Active) barreraGarajeAbierta = true;
+    if (barreraGarajeAbierta)
       Matter.Body.setPosition(wallGarage, { x: -5000, y: 0 });
-    } else {
-      Matter.Body.setPosition(wallGarage, { x: 1000, y: 575 });
-    }
+    else Matter.Body.setPosition(wallGarage, { x: 1020, y: 575 });
   }
 });
 
 setInterval(() => {
-  if (gameStarted && !levelWon) {
-    Matter.Engine.update(engine, 1000 / 60);
-  }
+  if (gameStarted && !levelWon) Matter.Engine.update(engine, 1000 / 60);
 
   const entities = Object.keys(players)
     .filter((id) => !players[id].isFinished)
@@ -355,8 +375,7 @@ setInterval(() => {
   levelPlatforms.forEach((step, index) => {
     let color = "#444";
     if (step === button1) color = btn1Active ? "#00FF00" : "#FF0000";
-    if (step === button2) color = barreraGarajeAbierta ? "#00FF00" : "#FF0000"; // Se queda verde si se activó permanentemente
-
+    if (step === button2) color = barreraGarajeAbierta ? "#00FF00" : "#FF0000";
     entities.push({
       id: `step_${index}`,
       x: step.position.x,
@@ -380,13 +399,15 @@ setInterval(() => {
     }),
   );
 
-  if (!hasKey)
+  // La llave solo se envía al cliente si NO la tiene nadie
+  if (!hasKey) {
     entities.push({
       id: "key",
       x: key.position.x,
       y: key.position.y,
       type: "key",
     });
+  }
 
   entities.push({
     id: "door",
@@ -395,7 +416,6 @@ setInterval(() => {
     type: "door",
     isOpen: doorOpen,
   });
-
   entities.push({
     id: "ground",
     x: ground.position.x,
@@ -403,7 +423,7 @@ setInterval(() => {
     type: "ground",
   });
 
-  io.emit("stateUpdate", { entities, levelWon, currentLevel });
+  io.emit("stateUpdate", { entities, levelWon, currentLevel, gameStarted });
 }, 1000 / 60);
 
 server.listen(3000, "0.0.0.0");
