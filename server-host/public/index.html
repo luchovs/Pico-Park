@@ -97,7 +97,6 @@
 
       const engine = Matter.Engine.create();
 
-      // DOM
       const overlay = document.getElementById("winOverlay");
       const overlayTitle = document.getElementById("overlayTitle");
       const playerStatus = document.getElementById("playerStatus");
@@ -125,7 +124,7 @@
 
       let levelWon = false;
 
-      // IMÁGENES
+
       const imgKey = new Image();
       imgKey.src = "/llave.png";
 
@@ -151,10 +150,6 @@
         },
       };
 
-      // =========================
-      // JUGADORES
-      // =========================
-
       socket.on("playerCountUpdate", (data) => {
         playerStatus.innerText = `Conectados: ${data.count}/4`;
 
@@ -169,7 +164,6 @@
             btnRestart.innerText = "EMPEZAR JUEGO";
           } else {
             btnRestart.disabled = true;
-            // Texto dinámico según falten o sobren jugadores
             if (data.count < 2) {
               overlayTitle.innerText = "ESPERANDO JUGADORES (MIN. 2)";
             } else if (data.count > 4) {
@@ -179,26 +173,15 @@
         }
       });
 
-      // =========================
-      // BOTÓN START
-      // =========================
-
       btnRestart.onclick = () => {
         overlay.style.display = "none";
 
         socket.emit("restart");
       };
 
-      // =========================
-      // RENDER
-      // =========================
 
       Matter.Events.on(render, "afterRender", () => {
         const ctx = render.context;
-
-        // =========================
-        // SUELO
-        // =========================
 
         const ground = currentEntities.find((e) => e.type === "ground");
 
@@ -208,10 +191,6 @@
           ctx.fillRect(ground.x - 640, ground.y - 30, 1280, 60);
         }
 
-        // =========================
-        // PLATAFORMAS
-        // =========================
-
         currentEntities
           .filter((e) => e.type === "platform")
           .forEach((plt) => {
@@ -220,9 +199,6 @@
             ctx.fillRect(plt.x - plt.w / 2, plt.y - plt.h / 2, plt.w, plt.h);
           });
 
-        // =========================
-        // PUERTA
-        // =========================
 
         const door = currentEntities.find((e) => e.type === "door");
 
@@ -242,9 +218,6 @@
           }
         }
 
-        // =========================
-        // LLAVE
-        // =========================
 
         const keyEnt = currentEntities.find((e) => e.type === "key");
 
@@ -252,9 +225,6 @@
           ctx.drawImage(imgKey, keyEnt.x - 25, keyEnt.y - 45, 20, 51.2);
         }
 
-        // =========================
-        // JUGADORES
-        // =========================
 
         currentEntities
           .filter((e) => e.type === "player")
@@ -267,7 +237,6 @@
 
             ctx.strokeRect(p.x - 16, p.y - 24, 32, 48);
 
-            // OJOS
             ctx.fillStyle = "white";
 
             let off = p.moveDir >= 0 ? -6 : -14;
@@ -289,9 +258,6 @@
           });
       });
 
-      // =========================
-      // UPDATE
-      // =========================
 
       socket.on("stateUpdate", (data) => {
         currentEntities = data.entities;
@@ -332,10 +298,6 @@
           }
         });
 
-        // =========================
-        // WIN
-        // =========================
-
         if (data.levelWon && !levelWon) {
           levelWon = true;
 
@@ -356,10 +318,6 @@
         } else if (!data.levelWon) {
           levelWon = false;
         }
-
-        // =========================
-        // LIMPIAR ENTIDADES VIEJAS
-        // =========================
 
         const ids = currentEntities.map((e) => e.id);
 

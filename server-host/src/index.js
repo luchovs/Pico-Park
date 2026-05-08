@@ -16,16 +16,14 @@ engine.world.gravity.y = 2.8;
 const WIDTH = 1280;
 const HEIGHT = 720;
 const MAX_PLAYERS = 4;
-const MIN_PLAYERS = 2;
-
-// Variables de estado
+const MIN_PLAYERS = 1;
 const players = {};
 const colors = ["#FF0000", "#00FF00", "#0000FF", "#FFFF00"];
 let hasKey = false,
   doorOpen = false,
   levelWon = false;
-let keyHolder = null; // ID del jugador que tiene la llave
-let keySpawnPos = { x: 900, y: 400 }; // Posición de respawn de la llave
+let keyHolder = null; 
+let keySpawnPos = { x: 900, y: 400 }; 
 
 let btn1Active = false,
   btn2Active = false,
@@ -36,7 +34,6 @@ let gameStarted = false,
 let levelPlatforms = [],
   spikes = [];
 
-// Escenario base
 const ground = Matter.Bodies.rectangle(WIDTH / 2, 680, WIDTH, 60, {
   isStatic: true,
   friction: 0,
@@ -50,7 +47,6 @@ const rightWall = Matter.Bodies.rectangle(WIDTH, HEIGHT / 2, 20, HEIGHT, {
   friction: 0,
 });
 
-// Entidades (La llave empieza en su spawn)
 const key = Matter.Bodies.circle(0, 0, 20, { isStatic: true, isSensor: true });
 const door = Matter.Bodies.rectangle(1180, 610, 60, 80, {
   isStatic: true,
@@ -113,15 +109,15 @@ function cargarNivel(num) {
         isStatic: true,
         friction: 0,
       }),
-      Matter.Bodies.rectangle(120, 250, 100, 20, {
+      Matter.Bodies.rectangle(130, 250, 150, 20, {
         isStatic: true,
         friction: 0,
       }),
-      Matter.Bodies.rectangle(350, 420, 100, 20, {
+      Matter.Bodies.rectangle(350, 420, 200, 20, {
         isStatic: true,
         friction: 0,
       }),
-      Matter.Bodies.rectangle(600, 320, 120, 20, {
+      Matter.Bodies.rectangle(600, 320, 200, 20, {
         isStatic: true,
         friction: 0,
       }),
@@ -180,27 +176,22 @@ Matter.Events.on(engine, "collisionStart", (event) => {
     );
     if (!pEntry) return;
     const [id, p] = pEntry;
-
-    // RESPRAWN DE JUGADOR Y LLAVE
     if (bodyA.label === "spike" || bodyB.label === "spike") {
       if (keyHolder === id) {
-        // Si el que muere tiene la llave
         keyHolder = null;
         hasKey = false;
         doorOpen = false;
-        Matter.Body.setPosition(key, keySpawnPos); // Reaparece la llave
+        Matter.Body.setPosition(key, keySpawnPos);
       }
       Matter.Body.setPosition(p.body, { x: 150, y: 600 });
       Matter.Body.setVelocity(p.body, { x: 0, y: 0 });
     }
-
-    // AGARRAR LLAVE
     if ((bodyA === key || bodyB === key) && !hasKey) {
       if (currentLevel === 1 || btn1Active) {
         hasKey = true;
-        keyHolder = id; // Este jugador ahora "lleva" la llave
+        keyHolder = id; 
         doorOpen = true;
-        Matter.Body.setPosition(key, { x: -5000, y: -5000 }); // La sacamos del mapa
+        Matter.Body.setPosition(key, { x: -5000, y: -5000 }); 
       }
     }
   });
@@ -261,7 +252,6 @@ io.on("connection", (socket) => {
   socket.on("disconnect", () => {
     if (players[socket.id]) {
       if (keyHolder === socket.id) {
-        // Si se desconecta el portador, la llave vuelve
         keyHolder = null;
         hasKey = false;
         doorOpen = false;
@@ -313,7 +303,6 @@ Matter.Events.on(engine, "beforeUpdate", () => {
 
       if (p.wantsToJump) {
         const tocaPuerta = Matter.Query.collides(p.body, [door]).length > 0;
-        // Solo puede entrar si el EQUIPO tiene la llave (hasKey)
         if (
           hasKey &&
           tocaPuerta &&
@@ -321,7 +310,7 @@ Matter.Events.on(engine, "beforeUpdate", () => {
         ) {
           p.isFinished = true;
           playersFinished.push(id);
-          if (keyHolder === id) keyHolder = null; // Si el portador entra, la llave se "consume"
+          if (keyHolder === id) keyHolder = null;
           Matter.Body.setPosition(p.body, { x: -5000, y: -5000 });
         } else if (Math.abs(p.body.velocity.y) < 0.1) {
           Matter.Body.setVelocity(p.body, { x: p.body.velocity.x, y: -18 });
@@ -398,8 +387,6 @@ setInterval(() => {
       color: "#FF4500",
     }),
   );
-
-  // La llave solo se envía al cliente si NO la tiene nadie
   if (!hasKey) {
     entities.push({
       id: "key",
