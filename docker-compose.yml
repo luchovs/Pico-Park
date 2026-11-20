@@ -1,0 +1,10 @@
+services:
+  server:
+    build: ./server-host
+    image: pico-park-server:1.0
+    container_name: pico-park-server
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+    restart: unless-stopped
