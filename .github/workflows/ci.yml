@@ -53,7 +53,8 @@ jobs:
           context: ./server-host
           push: ${{ github.event_name == 'push' }}
           tags: ${{ steps.meta.outputs.tags }}
-    deploy:
+
+  deploy:
     needs: build
     if: github.event_name == 'push'
     runs-on: self-hosted
