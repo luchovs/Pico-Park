@@ -53,3 +53,16 @@ jobs:
           context: ./server-host
           push: ${{ github.event_name == 'push' }}
           tags: ${{ steps.meta.outputs.tags }}
+    deploy:
+    needs: build
+    if: github.event_name == 'push'
+    runs-on: self-hosted
+    steps:
+      - name: Desplegar en la VM
+        run: |
+          cd /home/Luciano/Pico-Park
+          git pull --ff-only
+          docker compose pull
+          docker compose up -d
+          sleep 5
+          curl -fsS -o /dev/null http://localhost:3000 && echo "Despliegue OK"

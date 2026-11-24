@@ -1,7 +1,7 @@
 services:
   server:
     build: ./server-host
-    image: pico-park-server:1.0
+    image: pico-park-server
     container_name: pico-park-server
     ports:
       - "3000:3000"
