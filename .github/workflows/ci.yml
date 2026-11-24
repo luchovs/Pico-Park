@@ -1,0 +1,55 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Descargar el código
+        uses: actions/checkout@v4
+
+      - name: Instalar Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: server-host/package-lock.json
+
+      - name: Instalar dependencias
+        run: npm ci
+        working-directory: server-host
+
+      - name: Correr tests (si existen)
+        run: npm test --if-present
+        working-directory: server-host
+
+      - name: Iniciar sesión en Docker Hub
+        if: github.event_name == 'push'
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Preparar Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Definir tags de la imagen
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: luchovs/pico-park-server
+          tags: |
+            type=raw,value=latest
+            type=sha
+
+      - name: Construir y publicar la imagen
+        uses: docker/build-push-action@v6
+        with:
+          context: ./server-host
+          push: ${{ github.event_name == 'push' }}
+          tags: ${{ steps.meta.outputs.tags }}
